@@ -48,7 +48,7 @@
         }
 
         // Game variables
-        let gravity = 0.4;
+        let gravity = 0.35;
         let birdMovement = 0;
         let gameActive = true;
         let score = 0;
@@ -119,8 +119,8 @@
         // Timers
         let lastPipeSpawn = 0;
         let lastBirdFlap = 0;
-        const pipeSpawnInterval = 1500;
-        const birdFlapInterval = 200;
+        const pipeSpawnInterval = 1700;
+        const birdFlapInterval = 150;
 
         // Scale image function
         function scaleImageToFit(image, targetWidth, targetHeight) {
@@ -306,7 +306,7 @@
         // Event handling
         function handleInput() {
             birdMovement = 0;
-            birdMovement = -9.5;
+            birdMovement = -9;
             flapSound.play();
         }
 
