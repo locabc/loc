@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Flappy Bird</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            width: 432px;
+            height: 768px;
+            touch-action: none;
+        }
+        @font-face {
+            font-family: '04B_19';
+            src: url('04B_19.ttf') format('truetype');
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="432" height="768"></canvas>
+    <script>
+        // Get canvas and context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Function to resize image
+        function resizeImage(img, newWidth, newHeight, smooth = false) {
+            const c = document.createElement('canvas');
+            c.width = newWidth;
+            c.height = newHeight;
+            const sctx = c.getContext('2d');
+            sctx.imageSmoothingEnabled = smooth;
+            sctx.drawImage(img, 0, 0, newWidth, newHeight);
+            return c;
+        }
+
+        // Game variables
+        let gravity = 0.4;
+        let birdMovement = 0;
+        let gameActive = true;
+        let score = 0;
+        let highScore = 0;
+        let gameState = 'main game';
+        let floorXPos = 0;
+        let birdIndex = 0;
+
+        // Load assets (replace paths with your asset paths)
+        let bg = new Image();
+        bg.src = 'assets/background.png'; // REPLACE WITH YOUR BACKGROUND IMAGE PATH
+        let floor = new Image();
+        floor.src = 'assets/floor.png'; // REPLACE WITH YOUR FLOOR IMAGE PATH
+        let birdDown = new Image();
+        birdDown.src = 'assets/yellowbird-downflap.png'; // REPLACE WITH YOUR BIRDDOWN IMAGE PATH
+        let birdMid = new Image();
+        birdMid.src = 'assets/yellowbird-midflap.png'; // REPLACE WITH YOUR BIRDMID IMAGE PATH
+        let birdUp = new Image();
+        birdUp.src = 'assets/yellowbird-upflap.png'; // REPLACE WITH YOUR BIRDUP IMAGE PATH
+        let pipeSurface = new Image();
+        pipeSurface.src = 'assets/pipe-green.png'; // REPLACE WITH YOUR PIPE IMAGE PATH
+        let gameOverSurface = new Image();
+        gameOverSurface.src = 'assets/message.png'; // REPLACE WITH YOUR GAME OVER IMAGE PATH
+
+        const birdList = [birdDown, birdMid, birdUp];
+        let bird = birdList[birdIndex];
+        let birdRect = { x: 100 - bird.width / 2, y: 384 - bird.height / 2, width: bird.width, height: bird.height };
+
+        // Load reward images (replace paths with your asset paths)
+        const rewardImages = [];
+        try {
+            for (let i = 1; i <= 9; i++) {
+                const img = new Image();
+                img.src = `assets/anh${i}.jpg`; // REPLACE WITH YOUR REWARD IMAGE PATHS
+                rewardImages.push(img);
+            }
+        } catch (e) {
+            console.error(`Error loading reward images: ${e}`);
+            window.close();
+        }
+
+        // Load sounds (replace paths with your sound paths)
+        const flapSound = new Audio('sound/sfx_wing.wav'); // REPLACE WITH YOUR FLAP SOUND PATH
+        const hitSound = new Audio('sound/sfx_hit.wav'); // REPLACE WITH YOUR HIT SOUND PATH
+        const scoreSound = new Audio('sound/sfx_point.wav'); // REPLACE WITH YOUR SCORE SOUND PATH
+
+        // Font setup (replace with your font file or use a web-safe font)
+        const gameFont = '35px "04B_19"'; // REPLACE WITH YOUR FONT OR USE A WEB-SAFE FONT
+        ctx.font = gameFont;
+
+        // Pipe variables
+        let pipeList = [];
+        let lastPipeTopY = null; // Lưu vị trí Y của đỉnh ống dưới cuối cùng
+        let passedPipes = [];
+        const pipeHeight = [200, 300, 400];
+        let selectedRewardImage = null;
+
+        // Win surface setup
+        const winSurface = document.createElement('canvas');
+        winSurface.width = 432;
+        winSurface.height = 768;
+        const winCtx = winSurface.getContext('2d');
+        const winRect = { x: 0, y: 0 };
+
+        // Close button
+        const closeButtonRect = { x: 400, y: 85, width: 30, height: 30 };
+
+        // Timers
+        let lastPipeSpawn = 0;
+        let lastBirdFlap = 0;
+        const pipeSpawnInterval = 1200;
+        const birdFlapInterval = 200;
+
+        // Scale image function
+        function scaleImageToFit(image, targetWidth, targetHeight) {
+            const originalWidth = image.width;
+            const originalHeight = image.height;
+            const ratioW = targetWidth / originalWidth;
+            const ratioH = targetHeight / originalHeight;
+            const scaleRatio = Math.min(ratioW, ratioH);
+            return { width: originalWidth * scaleRatio, height: originalHeight * scaleRatio };
+        }
+
+        // Draw floor
+        function drawFloor() {
+            ctx.drawImage(floor, floorXPos, 650);
+            ctx.drawImage(floor, floorXPos + 432, 650);
+        }
+
+        
+        function createPipe() {
+            const gameAreaHeight = 650;
+            const pipeGap = 200;
+            const minPipeMargin = 60;
+            const maxVerticalChange = 120;
+
+            const absoluteMinY = minPipeMargin + pipeGap;
+            const absoluteMaxY = gameAreaHeight - minPipeMargin;
+
+            let targetMinY, targetMaxY;
+
+            if (lastPipeTopY === null) {
+                targetMinY = absoluteMinY;
+                targetMaxY = absoluteMaxY;
+            } else {
+                targetMinY = Math.max(absoluteMinY, lastPipeTopY - maxVerticalChange);
+                targetMaxY = Math.min(absoluteMaxY, lastPipeTopY + maxVerticalChange);
+            }
+
+            const randomPipePos = Math.random() * (targetMaxY - targetMinY) + targetMinY;
+            lastPipeTopY = randomPipePos;
+
+            // Tạo đối tượng ống dưới
+            const bottomPipe = {
+                type: 'bottom', // <-- THÊM DÒNG NÀY
+                centerx: 500,
+                y: randomPipePos,
+                width: pipeSurface.width,
+                height: pipeSurface.height,
+                centery: randomPipePos + pipeSurface.height / 2,
+                bottom: randomPipePos + pipeSurface.height
+            };
+
+            const topPipeBottomY = randomPipePos - pipeGap;
+            const topPipeY = topPipeBottomY - pipeSurface.height;
+
+            // Tạo đối tượng ống trên
+            const topPipe = {
+                type: 'top', // <-- THÊM DÒNG NÀY
+                centerx: 500,
+                y: topPipeY,
+                width: pipeSurface.width,
+                height: pipeSurface.height,
+                centery: topPipeY + pipeSurface.height / 2,
+                bottom: topPipeBottomY
+            };
+
+            return [bottomPipe, topPipe];
+        }
+        // Move pipes
+        function movePipe(pipes) {
+            for (let pipe of pipes) {
+                pipe.centerx -= 4.5;
+            }
+            return pipes;
+        }
+        // Draw pipes
+        function drawPipe(pipes) {
+            for (let pipe of pipes) {
+                // Thay đổi điều kiện kiểm tra ở đây
+                if (pipe.type === 'bottom') {
+                    // Vẽ ống dưới (vẽ bình thường)
+                    ctx.drawImage(pipeSurface, pipe.centerx - pipeSurface.width / 2, pipe.y);
+                } else {
+                    // Vẽ ống trên (lật ngược lại)
+                    ctx.save();
+                    ctx.scale(1, -1);
+                    ctx.drawImage(pipeSurface, pipe.centerx - pipeSurface.width / 2, -(pipe.y + pipeSurface.height));
+                    ctx.restore();
+                }
+            }
+        }
+
+        // Check collision
+        function checkCollision(pipes) {
+            for (let pipe of pipes) {
+                if (birdRect.x < pipe.centerx - pipe.width / 2 + pipe.width &&
+                    birdRect.x + birdRect.width > pipe.centerx - pipe.width / 2 &&
+                    birdRect.y < pipe.y + pipe.height &&
+                    birdRect.y + birdRect.height > pipe.y) {
+                    hitSound.play();
+                    return false;
+                }
+            }
+            if (birdRect.y <= -75 || birdRect.y + birdRect.height >= 650) {
+                return false;
+            }
+            return true;
+        }
+
+        // Rotate bird
+        function rotateBird(bird) {
+            const canvas = document.createElement('canvas');
+            canvas.width = bird.width;
+            canvas.height = bird.height;
+            const ctx = canvas.getContext('2d');
+            ctx.translate(bird.width / 2, bird.height / 2);
+            ctx.rotate((-birdMovement * 3) * Math.PI / 180);
+            ctx.drawImage(bird, -bird.width / 2, -bird.height / 2);
+            return canvas;
+        }
+
+        // Bird animation
+        function birdAnimation() {
+            birdIndex = birdIndex < 2 ? birdIndex + 1 : 0;
+            bird = birdList[birdIndex];
+            birdRect = { x: 100 - bird.width / 2, y: birdRect.y, width: bird.width, height: bird.height };
+            return bird;
+        }
+
+        // Score display
+        function scoreDisplay(gameState) {
+            ctx.fillStyle = '#ffffff';
+            if (gameState === 'main game') {
+                const labelText = 'SCORE:';
+                const labelWidth = ctx.measureText(labelText).width;
+                ctx.fillText(labelText, 180 - labelWidth / 2, 130);
+
+                const scoreText = Math.floor(score).toString();
+                const scoreWidth = ctx.measureText(scoreText).width;
+                ctx.fillText(scoreText, 280 - scoreWidth / 2, 130);
+            } else if (gameState === 'game_over') {
+                const scoreText = `Score: ${Math.floor(score)}`;
+                const scoreWidth = ctx.measureText(scoreText).width;
+                ctx.fillText(scoreText, 216 - scoreWidth / 2, 130);
+
+                const highScoreText = `High Score: ${Math.floor(highScore)}`;
+                const highScoreWidth = ctx.measureText(highScoreText).width;
+                ctx.fillText(highScoreText, 216 - highScoreWidth / 2, 630);
+            } else if (gameState === 'win') {
+                winCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                winCtx.fillRect(0, 0, 432, 768);
+                if (selectedRewardImage) {
+                    const scaled = scaleImageToFit(selectedRewardImage, 432, 768);
+                    winCtx.drawImage(selectedRewardImage, 216 - scaled.width / 2, 384 - scaled.height / 2, scaled.width, scaled.height);
+                }
+                winCtx.fillStyle = '#ff0000';
+                winCtx.fillRect(closeButtonRect.x, closeButtonRect.y, closeButtonRect.width, closeButtonRect.height);
+                winCtx.fillStyle = '#ffffff';
+                winCtx.font = gameFont;
+                const closeText = 'X';
+                const closeWidth = winCtx.measureText(closeText).width;
+                winCtx.fillText(closeText, closeButtonRect.x + closeButtonRect.width / 2 - closeWidth / 2, closeButtonRect.y + closeButtonRect.height / 2 + 10);
+                ctx.drawImage(winSurface, winRect.x, winRect.y);
+            }
+        }
+
+        // Update score
+        function updateScore(score, highScore) {
+            return score > highScore ? score : highScore;
+        }
+
+        // Event handling
+        function handleInput() {
+            birdMovement = 0;
+            birdMovement = -9.5;
+            flapSound.play();
+        }
+
+        function handleCanvasInteraction(event) {
+    // Luôn gọi preventDefault() cho sự kiện chạm để tránh các hành vi mặc định
+    // của trình duyệt và ngăn lỗi "ghost click" (click ảo)
+    if (event.type === 'touchstart') {
+        event.preventDefault();
+    }
+
+    // Nếu đang trong game chính, thực hiện hành động nhảy
+    if (gameState === 'main game') {
+        handleInput();
+    } 
+    // Nếu đang ở màn hình game over, reset game
+    else if (gameState === 'game_over') {
+        gameState = 'main game';
+        pipeList = [];
+        passedPipes = [];
+        birdRect = { x: 100 - bird.width / 2, y: 384 - bird.height / 2, width: bird.width, height: bird.height };
+        birdMovement = 0;
+        score = 0;
+        selectedRewardImage = null;
+        lastPipeTopY = null;
+    } 
+    // Nếu đang ở màn hình thắng cuộc, kiểm tra xem có nhấn nút 'X' không
+    else if (gameState === 'win') {
+        const rect = canvas.getBoundingClientRect();
+        let x, y;
+
+        // Lấy tọa độ chính xác tùy theo loại sự kiện (chạm hoặc click)
+        if (event.type === 'touchstart') {
+            const touch = event.touches[0];
+            x = touch.clientX - rect.left;
+            y = touch.clientY - rect.top;
+        } else { // 'click'
+            x = event.clientX - rect.left;
+            y = event.clientY - rect.top;
+        }
+
+        // Kiểm tra nếu tọa độ nằm trong khu vực của nút 'X'
+        if (x >= closeButtonRect.x && x <= closeButtonRect.x + closeButtonRect.width &&
+            y >= closeButtonRect.y && y <= closeButtonRect.y + closeButtonRect.height) {
+            
+            // Nếu đúng, reset game để chơi tiếp
+            gameState = 'main game';
+            pipeList = [];
+            passedPipes = [];
+            birdRect = { x: 100 - bird.width / 2, y: 384 - bird.height / 2, width: bird.width, height: bird.height };
+            birdMovement = 0;
+            score = 0;
+            selectedRewardImage = null;
+            lastPipeTopY = null;
+        }
+    }
+}
+        // Cả click và touch đều sẽ gọi cùng một hàm xử lý
+        canvas.addEventListener('click', handleCanvasInteraction);
+        canvas.addEventListener('touchstart', handleCanvasInteraction);
+        // Game loop
+        function gameLoop(timestamp) {
+            // Timers
+            if (timestamp - lastPipeSpawn >= pipeSpawnInterval && gameState === 'main game') {
+                pipeList.push(...createPipe());
+                lastPipeSpawn = timestamp;
+            }
+            if (timestamp - lastBirdFlap >= birdFlapInterval && gameState === 'main game') {
+                bird = birdAnimation();
+                lastBirdFlap = timestamp;
+            }
+
+            // Draw background
+            ctx.drawImage(bg, 0, 0);
+
+            if (gameState === 'main game') {
+                // Bird
+                birdMovement += gravity;
+                birdRect.y += birdMovement;
+                const rotatedBird = rotateBird(bird);
+                ctx.drawImage(rotatedBird, birdRect.x, birdRect.y);
+
+                // Pipes
+                pipeList = movePipe(pipeList);
+                drawPipe(pipeList);
+
+                // Collision check
+                if (!checkCollision(pipeList)) {
+                    gameState = 'game_over';
+                }
+
+                // Score
+                for (let pipe of pipeList) {
+                    if (pipe.bottom >= 600 && !passedPipes.includes(pipe)) {
+                        if (pipe.centerx < birdRect.x + birdRect.width / 2) {
+                            passedPipes.push(pipe);
+                            score += 1;
+                            scoreSound.play();
+                        }
+                    }
+                }
+
+                scoreDisplay('main game');
+
+                // Win condition
+                if (Math.floor(score) >=3) {
+                    gameState = 'win';
+                    const randomIndex = Math.floor(Math.random() * rewardImages.length);
+                    const randomImage = rewardImages[randomIndex];
+                    const scaled = scaleImageToFit(randomImage, 432, 768);
+                    selectedRewardImage = resizeImage(randomImage, scaled.width, scaled.height, true);
+                }
+            } else if (gameState === 'game_over') {
+                ctx.drawImage(gameOverSurface, 216 - gameOverSurface.width / 2, 384 - gameOverSurface.height / 2);
+                highScore = updateScore(score, highScore);
+                scoreDisplay('game_over');
+            } else if (gameState === 'win') {
+                scoreDisplay('win');
+            }
+
+            // Floor
+            if (gameState !== 'win') {
+                floorXPos -= 1;
+                drawFloor();
+                if (floorXPos <= -432) {
+                    floorXPos = 0;
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game loop after assets are loaded
+        Promise.all([
+            new Promise(resolve => bg.onload = resolve),
+            new Promise(resolve => floor.onload = resolve),
+            new Promise(resolve => birdDown.onload = resolve),
+            new Promise(resolve => birdMid.onload = resolve),
+            new Promise(resolve => birdUp.onload = resolve),
+            new Promise(resolve => pipeSurface.onload = resolve),
+            new Promise(resolve => gameOverSurface.onload = resolve),
+            ...rewardImages.map(img => new Promise(resolve => img.onload = resolve)),
+            document.fonts.load('35px "04B_19"')
+        ]).then(() => {
+            // Scale assets
+            bg = resizeImage(bg, bg.width * 2, bg.height * 2, false);
+            floor = resizeImage(floor, floor.width * 2, floor.height * 2, false);
+            birdDown = resizeImage(birdDown, birdDown.width * 2, birdDown.height * 2, false);
+            birdMid = resizeImage(birdMid, birdMid.width * 2, birdMid.height * 2, false);
+            birdUp = resizeImage(birdUp, birdUp.width * 2, birdUp.height * 2, false);
+            pipeSurface = resizeImage(pipeSurface, pipeSurface.width * 2, pipeSurface.height * 2, false);
+            gameOverSurface = resizeImage(gameOverSurface, gameOverSurface.width * 2, gameOverSurface.height * 2, false);
+            birdList[0] = birdDown;
+            birdList[1] = birdMid;
+            birdList[2] = birdUp;
+            bird = birdList[birdIndex];
+
+            // Update bird rect
+            birdRect = { x: 100 - bird.width / 2, y: 384 - bird.height / 2, width: bird.width, height: bird.height };
+
+            requestAnimationFrame(gameLoop);
+        });
+    </script>
+</body>
+</html>
