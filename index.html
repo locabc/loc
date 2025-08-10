@@ -72,6 +72,7 @@
         pipeSurface.src = 'assets/pipe-green.png'; // REPLACE WITH YOUR PIPE IMAGE PATH
         let gameOverSurface = new Image();
         gameOverSurface.src = 'assets/message.png'; // REPLACE WITH YOUR GAME OVER IMAGE PATH
+        let flippedPipeSurface; // Will be created after loading
 
         const birdList = [birdDown, birdMid, birdUp];
         let bird = birdList[birdIndex];
@@ -119,8 +120,8 @@
         // Timers
         let lastPipeSpawn = 0;
         let lastBirdFlap = 0;
-        const pipeSpawnInterval = 1700;
-        const birdFlapInterval = 150;
+        const pipeSpawnInterval = 1350;
+        const birdFlapInterval = 160;
 
         // Scale image function
         function scaleImageToFit(image, targetWidth, targetHeight) {
@@ -193,23 +194,19 @@
         // Move pipes
         function movePipe(pipes) {
             for (let pipe of pipes) {
-                pipe.centerx -= 3.8;
+                pipe.centerx -= 4.35;
             }
             return pipes;
         }
         // Draw pipes
         function drawPipe(pipes) {
             for (let pipe of pipes) {
-                // Thay đổi điều kiện kiểm tra ở đây
                 if (pipe.type === 'bottom') {
                     // Vẽ ống dưới (vẽ bình thường)
                     ctx.drawImage(pipeSurface, pipe.centerx - pipeSurface.width / 2, pipe.y);
                 } else {
-                    // Vẽ ống trên (lật ngược lại)
-                    ctx.save();
-                    ctx.scale(1, -1);
-                    ctx.drawImage(pipeSurface, pipe.centerx - pipeSurface.width / 2, -(pipe.y + pipeSurface.height));
-                    ctx.restore();
+                    // Vẽ ống trên (sử dụng hình ảnh đã lật sẵn)
+                    ctx.drawImage(flippedPipeSurface, pipe.centerx - pipeSurface.width / 2, pipe.y);
                 }
             }
         }
@@ -233,19 +230,15 @@
 
         // Rotate bird
         function rotateBird(bird) {
-            // Thiết lập kích thước cho canvas ẩn vừa bằng kích thước con chim
-            offscreenCanvas.width = bird.width;
-            offscreenCanvas.height = bird.height;
-
             // Xóa nội dung cũ trên canvas ẩn
-            offscreenCtx.clearRect(0, 0, bird.width, bird.height);
+            offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
 
             // Di chuyển tâm xoay vào giữa canvas ẩn
-            offscreenCtx.translate(bird.width / 2, bird.height / 2);
+            offscreenCtx.translate(offscreenCanvas.width / 2, offscreenCanvas.height / 2);
             // Xoay
             offscreenCtx.rotate((-birdMovement * 3) * Math.PI / 180);
             // Vẽ con chim đã xoay lên canvas ẩn
-            offscreenCtx.drawImage(bird, -bird.width / 2, -bird.height / 2);
+            offscreenCtx.drawImage(bird, -offscreenCanvas.width / 2, -offscreenCanvas.height / 2);
             // Reset lại các biến đổi (xoay, di chuyển) để chuẩn bị cho lần vẽ tiếp theo
             offscreenCtx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -306,16 +299,14 @@
         // Event handling
         function handleInput() {
             birdMovement = 0;
-            birdMovement = -9;
+            birdMovement = -9.3;
             flapSound.play();
         }
 
         function handleCanvasInteraction(event) {
-    // Luôn gọi preventDefault() cho sự kiện chạm để tránh các hành vi mặc định
+    // Luôn gọi preventDefault() cho sự kiện để tránh các hành vi mặc định
     // của trình duyệt và ngăn lỗi "ghost click" (click ảo)
-    if (event.type === 'touchstart') {
-        event.preventDefault();
-    }
+    event.preventDefault();
 
     // Nếu đang trong game chính, thực hiện hành động nhảy
     if (gameState === 'main game') {
@@ -337,12 +328,12 @@
         const rect = canvas.getBoundingClientRect();
         let x, y;
 
-        // Lấy tọa độ chính xác tùy theo loại sự kiện (chạm hoặc click)
+        // Lấy tọa độ chính xác tùy theo loại sự kiện (chạm hoặc mousedown)
         if (event.type === 'touchstart') {
             const touch = event.touches[0];
             x = touch.clientX - rect.left;
             y = touch.clientY - rect.top;
-        } else { // 'click'
+        } else { // 'mousedown'
             x = event.clientX - rect.left;
             y = event.clientY - rect.top;
         }
@@ -363,9 +354,9 @@
         }
     }
 }
-        // Cả click và touch đều sẽ gọi cùng một hàm xử lý
-        canvas.addEventListener('click', handleCanvasInteraction);
-        canvas.addEventListener('touchstart', handleCanvasInteraction);
+        // Thêm listener với passive: false để cho phép preventDefault hoạt động
+        canvas.addEventListener('touchstart', handleCanvasInteraction, { passive: false });
+        canvas.addEventListener('mousedown', handleCanvasInteraction, { passive: false });
         // Game loop
         function gameLoop(timestamp) {
             // Timers
@@ -467,6 +458,18 @@
 
             // Update bird rect
             birdRect = { x: 100 - bird.width / 2, y: 384 - bird.height / 2, width: bird.width, height: bird.height };
+
+            // Set offscreen canvas size once
+            offscreenCanvas.width = bird.width;
+            offscreenCanvas.height = bird.height;
+
+            // Create flipped pipe surface once
+            flippedPipeSurface = document.createElement('canvas');
+            flippedPipeSurface.width = pipeSurface.width;
+            flippedPipeSurface.height = pipeSurface.height;
+            const flipCtx = flippedPipeSurface.getContext('2d');
+            flipCtx.scale(1, -1);
+            flipCtx.drawImage(pipeSurface, 0, -pipeSurface.height);
 
             requestAnimationFrame(gameLoop);
         });
