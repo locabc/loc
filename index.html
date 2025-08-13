@@ -120,7 +120,7 @@
         // Timers
         let lastPipeSpawn = 0;
         let lastBirdFlap = 0;
-        const pipeSpawnInterval = 1200;
+        const pipeSpawnInterval = 1250;
         const birdFlapInterval = 150;
 
         // Scale image function
@@ -194,7 +194,7 @@
         // Move pipes
         function movePipe(pipes) {
             for (let pipe of pipes) {
-                pipe.centerx -= 4.7;
+                pipe.centerx -= 4.5;
             }
             return pipes;
         }
@@ -299,7 +299,7 @@
         // Event handling
         function handleInput() {
             birdMovement = 0;
-            birdMovement = -10;
+            birdMovement = -9.5;
             flapSound.play();
         }
 
