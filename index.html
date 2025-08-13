@@ -81,11 +81,11 @@
         // Load reward images (replace paths with your asset paths)
         const rewardImages = [];
         try {
-            for (let i = 1; i <= 9; i++) {
-                const img = new Image();
-                img.src = `assets/anh${i}.JPG`; // REPLACE WITH YOUR REWARD IMAGE PATHS
-                rewardImages.push(img);
-            }
+           [2, 3, 8, 9, 10].forEach(i => {
+        const img = new Image();
+        img.src = `assets/anh${i}.JPG`;
+        rewardImages.push(img);
+            });
         } catch (e) {
             console.error(`Error loading reward images: ${e}`);
             window.close();
@@ -120,8 +120,8 @@
         // Timers
         let lastPipeSpawn = 0;
         let lastBirdFlap = 0;
-        const pipeSpawnInterval = 1350;
-        const birdFlapInterval = 160;
+        const pipeSpawnInterval = 1200;
+        const birdFlapInterval = 150;
 
         // Scale image function
         function scaleImageToFit(image, targetWidth, targetHeight) {
@@ -194,7 +194,7 @@
         // Move pipes
         function movePipe(pipes) {
             for (let pipe of pipes) {
-                pipe.centerx -= 4.35;
+                pipe.centerx -= 4.7;
             }
             return pipes;
         }
@@ -299,7 +299,7 @@
         // Event handling
         function handleInput() {
             birdMovement = 0;
-            birdMovement = -9.3;
+            birdMovement = -8.5;
             flapSound.play();
         }
 
@@ -404,7 +404,7 @@
                 scoreDisplay('main game');
 
                 // Win condition
-                if (Math.floor(score) >=25) {
+                if (Math.floor(score) >=15) {
                     gameState = 'win';
                     const randomIndex = Math.floor(Math.random() * rewardImages.length);
                     const randomImage = rewardImages[randomIndex];
